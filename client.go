@@ -21,8 +21,8 @@ type Client struct {
 	*clientOptions
 }
 
-func NewClient() (*Client, error) {
-	opts, err := newClientOptions()
+func NewClient(o ...ClientOption) (*Client, error) {
+	opts, err := newClientOptions(o...)
 	if err != nil {
 		return nil, err
 	}
