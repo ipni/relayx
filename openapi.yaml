@@ -1,0 +1,181 @@
+openapi: 3.0.0
+info:
+  title: Relayx API
+  version: "1.0"
+  description: This is the API for the Relayx server.
+servers:
+  - url: http://localhost:8080
+    description: Development server
+paths:
+  /ipni/v0/relay/find/{multihash}:
+    get:
+      summary: Find providers for a multihash.
+      description: Finds providers that have a specific multihash.
+      tags:
+        - find
+      parameters:
+        - name: multihash
+          in: path
+          description: Multihash or CID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindGetResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ipni/v0/relay/ingest/{provider_id}/{context_id}:
+    put:
+      summary: Ingest entries for a provider and context.
+      description: Adds entries to the index for a specific provider and context.
+      tags:
+        - ingest
+      parameters:
+        - name: provider_id
+          in: path
+          description: Provider ID
+          required: true
+          schema:
+            type: string
+        - name: context_id
+          in: path
+          description: Base64 encoded Context ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: Ingest request body
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestPutRequest"
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Remove a provider's context.
+      description: Removes entries associated with a specific provider and context.
+      tags:
+        - ingest
+      parameters:
+        - name: provider_id
+          in: path
+          description: Provider ID
+          required: true
+          schema:
+            type: string
+        - name: context_id
+          in: path
+          description: Base64 encoded Context ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ipni/v0/relay/ingest/{provider_id}:
+    delete:
+      summary: Remove a provider.
+      description: Removes all entries associated with a specific provider.
+      tags:
+        - ingest
+      parameters:
+        - name: provider_id
+          in: path
+          description: Provider ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  schemas:
+    IngestPutRequest:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            type: string  # Assuming multihash is represented as a string
+          description: A list of multihashes to be ingested.
+        metadata:
+          type: string
+          format: byte
+          description: Arbitrary metadata associated with the entries.
+
+    FindGetResponse:
+      type: object
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderValue"
+          description: A list of providers that have the requested multihash.
+
+    ProviderValue:
+      type: object
+      properties:
+        ProviderID:
+          type: string
+        ContextID:
+          type: string
+        MetadataBytes:
+          type: string
+          format: byte
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: A human-readable error message.
