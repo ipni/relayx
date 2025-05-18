@@ -146,8 +146,9 @@ components:
         entries:
           type: array
           items:
-            type: string  # Assuming multihash is represented as a string
-          description: A list of multihashes to be ingested.
+            type: string
+            format: byte
+          description: A list of multihashes to be ingested encoded as base64.
         metadata:
           type: string
           format: byte
