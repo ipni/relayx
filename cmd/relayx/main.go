@@ -74,7 +74,7 @@ func main() {
 							}
 						}
 						var err error
-						delegate, err = pebble.New(cctx.String("pebblePath"), opts)
+						delegate, err = pebble.New(cctx.Path("pebblePath"), opts)
 						if err != nil {
 							return fmt.Errorf("failed to create pebble indexer: %w", err)
 						}
