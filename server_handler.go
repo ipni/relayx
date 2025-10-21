@@ -60,17 +60,19 @@ func (rx *Server) ingestPutHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	logger.Debugw("Handing put request", "request", req)
+	logger.Debugw("Handing put request", "provider", providerID, "context", contextID, "count", len(req.Entries))
 	if err := rx.delegate.Put(indexer.Value{
 		ProviderID:    providerID,
 		ContextID:     contextID,
 		MetadataBytes: req.Metadata,
 	}, req.Entries...); err != nil {
+		logger.Errorw("Failed to ingest entries", "provider", providerID, "context", contextID, "count", len(req.Entries), "err", err)
 		rx.writeJson(w, http.StatusInternalServerError, ErrorResponse{
 			Error: fmt.Sprintf("failed to put entries: %s", err),
 		})
 		return
 	}
+	logger.Debugw("successfully ingested entries", "provider", providerID, "context", contextID, "count", len(req.Entries))
 	w.WriteHeader(http.StatusAccepted)
 }
 
