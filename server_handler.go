@@ -60,6 +60,7 @@ func (rx *Server) ingestPutHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	logger.Debugw("Handing put request", "request", req)
 	if err := rx.delegate.Put(indexer.Value{
 		ProviderID:    providerID,
 		ContextID:     contextID,

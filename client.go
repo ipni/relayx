@@ -54,7 +54,7 @@ func (c *Client) Get(multihash multihash.Multihash) ([]indexer.Value, bool, erro
 	default:
 		var errResp ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return nil, false, err
+			return nil, false, fmt.Errorf("failed to recode unsuccessfoul response %d:%w", resp.StatusCode, err)
 		}
 		return nil, false, fmt.Errorf("unsuccessful response %d: %s", resp.StatusCode, errResp.Error)
 	}
@@ -88,7 +88,7 @@ func (c *Client) Put(iv indexer.Value, entries ...multihash.Multihash) error {
 	default:
 		var errResp ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return err
+			return fmt.Errorf("failed to recode unsuccessfoul response %d:%w", resp.StatusCode, err)
 		}
 		return fmt.Errorf("unsuccessful response %d: %s", resp.StatusCode, errResp.Error)
 	}
@@ -118,7 +118,7 @@ func (c *Client) RemoveProvider(ctx context.Context, id peer.ID) error {
 	default:
 		var errResp ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return err
+			return fmt.Errorf("failed to recode unsuccessfoul response %d:%w", resp.StatusCode, err)
 		}
 		return fmt.Errorf("unsuccessful response %d: %s", resp.StatusCode, errResp.Error)
 	}
@@ -144,7 +144,7 @@ func (c *Client) RemoveProviderContext(providerID peer.ID, contextID []byte) err
 	default:
 		var errResp ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return err
+			return fmt.Errorf("failed to recode unsuccessfoul response %d:%w", resp.StatusCode, err)
 		}
 		return fmt.Errorf("unsuccessful response %d: %s", resp.StatusCode, errResp.Error)
 	}
