@@ -44,7 +44,7 @@ func (rx *Server) ingestPutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctxidPath := r.PathValue("context_id")
-	contextID, err := base64.StdEncoding.DecodeString(ctxidPath)
+	contextID, err := base64.URLEncoding.DecodeString(ctxidPath)
 	if err != nil || len(contextID) == 0 {
 		rx.writeJson(w, http.StatusBadRequest, ErrorResponse{
 			Error: "invalid context ID",

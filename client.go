@@ -61,7 +61,7 @@ func (c *Client) Get(multihash multihash.Multihash) ([]indexer.Value, bool, erro
 }
 
 func (c *Client) Put(iv indexer.Value, entries ...multihash.Multihash) error {
-	endpoint, err := url.JoinPath(c.serverAddr, "ingest", iv.ProviderID.String(), base64.StdEncoding.EncodeToString(iv.ContextID))
+	endpoint, err := url.JoinPath(c.serverAddr, "ingest", iv.ProviderID.String(), base64.URLEncoding.EncodeToString(iv.ContextID))
 	if err != nil {
 		return err
 	}
