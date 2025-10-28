@@ -49,8 +49,8 @@ paths:
             type: string
         - name: context_id
           in: path
-          description: Base64 encoded Context ID
-          required: true
+          description: Base64 encoded Context ID. If unspecified, empty context ID will be used, i.e. the top level ad context ID.
+          required: false
           schema:
             type: string
       requestBody:

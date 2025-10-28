@@ -28,6 +28,7 @@ type (
 func (rx *Server) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ipni/v0/relay/find/{multihash}", rx.findGetHandler)
+	mux.HandleFunc("PUT /ipni/v0/relay/ingest/{provider_id}/", rx.ingestPutHandler)
 	mux.HandleFunc("PUT /ipni/v0/relay/ingest/{provider_id}/{context_id}", rx.ingestPutHandler)
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}/{context_id}", rx.ingestDeleteProviderContextHandler)
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}", rx.ingestDeleteProviderHandler)
@@ -45,7 +46,7 @@ func (rx *Server) ingestPutHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctxidPath := r.PathValue("context_id")
 	contextID, err := base64.URLEncoding.DecodeString(ctxidPath)
-	if err != nil || len(contextID) == 0 {
+	if err != nil {
 		rx.writeJson(w, http.StatusBadRequest, ErrorResponse{
 			Error: "invalid context ID",
 		})
