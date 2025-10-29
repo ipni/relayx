@@ -28,6 +28,7 @@ type (
 func (rx *Server) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ipni/v0/relay/find/{multihash}", rx.findGetHandler)
+	mux.HandleFunc("PUT /ipni/v0/relay/ingest/{provider_id}", rx.ingestPutHandler)
 	mux.HandleFunc("PUT /ipni/v0/relay/ingest/{provider_id}/", rx.ingestPutHandler)
 	mux.HandleFunc("PUT /ipni/v0/relay/ingest/{provider_id}/{context_id}", rx.ingestPutHandler)
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}/{context_id}", rx.ingestDeleteProviderContextHandler)
