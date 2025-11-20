@@ -67,6 +67,10 @@ func main() {
 										return nil, fmt.Errorf("unknown filter policy: %s", name)
 									}
 								},
+								SkipUnknown: func(name, value string) bool {
+									logger.Errorw("Unknown pebble option", "name", name, "value", value)
+									return true
+								},
 							}); err != nil {
 								return fmt.Errorf("failed to parse pebble options: %w", err)
 							}
