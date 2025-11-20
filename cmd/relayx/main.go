@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	ppebble "github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/bloom"
+	ppebble "github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/bloom"
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipni/go-indexer-core"
 	"github.com/ipni/go-indexer-core/store/pebble"
@@ -49,16 +49,14 @@ func main() {
 					var delegate indexer.Interface
 					switch d := cctx.String("delegate"); d {
 					case "pebble":
-						opts := (&ppebble.Options{}).EnsureDefaults()
+						opts := &ppebble.Options{}
+						opts.EnsureDefaults()
 						if cctx.IsSet("pebbleOptions") {
 							popts, err := os.ReadFile(cctx.Path("pebbleOptions"))
 							if err != nil {
 								return fmt.Errorf("failed to read pebble options file: %w", err)
 							}
 							if err := opts.Parse(string(popts), &ppebble.ParseHooks{
-								NewCache: func(size int64) *ppebble.Cache {
-									return ppebble.NewCache(size)
-								},
 								NewFilterPolicy: func(name string) (ppebble.FilterPolicy, error) {
 									switch name {
 									case "none":
