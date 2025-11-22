@@ -1,4 +1,4 @@
-FROM golang:1.24.3-bullseye AS build
+FROM golang:1.25-bookworm AS build
 
 WORKDIR /go/src/relayx
 
