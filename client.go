@@ -163,10 +163,6 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) Iter() (indexer.Iterator, error) {
-	return nil, nil
-}
-
 func (c *Client) Stats() (*indexer.Stats, error) {
 	return nil, nil
 }

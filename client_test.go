@@ -540,15 +540,6 @@ func TestClientClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestClientIter(t *testing.T) {
-	client, err := NewClient()
-	require.NoError(t, err)
-
-	iter, err := client.Iter()
-	assert.NoError(t, err)
-	assert.Nil(t, iter)
-}
-
 func TestClientStats(t *testing.T) {
 	client, err := NewClient()
 	require.NoError(t, err)
