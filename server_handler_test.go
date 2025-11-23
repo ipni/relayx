@@ -44,10 +44,6 @@ func (m *MockDelegate) Close() error {
 	panic("should not have been called")
 }
 
-func (m *MockDelegate) Iter() (indexer.Iterator, error) {
-	panic("should not have been called")
-}
-
 func (m *MockDelegate) Stats() (*indexer.Stats, error) {
 	panic("should not have been called")
 }
