@@ -1,6 +1,6 @@
 module github.com/ipni/relayx
 
-go 1.24.6
+go 1.26
 
 require (
 	github.com/cockroachdb/pebble/v2 v2.1.4
