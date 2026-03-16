@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/ipfs/go-cid"
 	"github.com/ipni/go-indexer-core"
+	coremetrics "github.com/ipni/go-indexer-core/metrics"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"
+	promclient "github.com/prometheus/client_golang/prometheus"
+	"go.opencensus.io/stats/view"
 )
 
 type (
@@ -25,6 +29,31 @@ type (
 	}
 )
 
+func newMetricsHandler() http.Handler {
+	if err := view.Register(coremetrics.DefaultViews...); err != nil {
+		logger.Warnw("failed to register default metric views", "err", err)
+	}
+
+	if err := view.Register(coremetrics.PebbleViews...); err != nil {
+		logger.Warnw("failed to register pebble metric views", "err", err)
+	}
+
+	registry, ok := promclient.DefaultRegisterer.(*promclient.Registry)
+	if !ok {
+		logger.Warnf("failed to export default prometheus registry; some metrics will be unavailable; unexpected type: %T", promclient.DefaultRegisterer)
+	}
+
+	exporter, err := prometheus.NewExporter(prometheus.Options{
+		Registry:  registry,
+		Namespace: "storetheindex",
+	})
+	if err != nil {
+		logger.Warnw("could not create the prometheus stats exporter", "err", err)
+	}
+
+	return exporter
+}
+
 func (rx *Server) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ipni/v0/relay/find/{multihash}", rx.findGetHandler)
@@ -33,6 +62,7 @@ func (rx *Server) ServeMux() *http.ServeMux {
 	mux.HandleFunc("PUT /ipni/v0/relay/ingest/{provider_id}/{context_id}", rx.ingestPutHandler)
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}/{context_id}", rx.ingestDeleteProviderContextHandler)
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}", rx.ingestDeleteProviderHandler)
+	mux.Handle("GET /metrics/", newMetricsHandler())
 	return mux
 }
 
