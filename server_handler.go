@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
+	"runtime"
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/ipfs/go-cid"
@@ -54,6 +56,21 @@ func newMetricsHandler() http.Handler {
 	return exporter
 }
 
+func newPprofHandler() http.Handler {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
+	mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+	mux.HandleFunc("GET /debug/pprof/gc", func(w http.ResponseWriter, req *http.Request) {
+		runtime.GC()
+	})
+
+	return mux
+}
+
 func (rx *Server) ServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ipni/v0/relay/find/{multihash}", rx.findGetHandler)
@@ -63,6 +80,7 @@ func (rx *Server) ServeMux() *http.ServeMux {
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}/{context_id}", rx.ingestDeleteProviderContextHandler)
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}", rx.ingestDeleteProviderHandler)
 	mux.Handle("GET /metrics/", newMetricsHandler())
+	mux.Handle("GET /debug/pprof/", newPprofHandler())
 	return mux
 }
 
