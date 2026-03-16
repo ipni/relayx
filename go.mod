@@ -1,6 +1,6 @@
 module github.com/ipni/relayx
 
-go 1.24.6
+go 1.26
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
