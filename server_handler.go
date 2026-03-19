@@ -91,6 +91,17 @@ func (rx *Server) ServeMux() *http.ServeMux {
 		})
 	}
 
+	mux.HandleFunc("GET /metrics/cids/count", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "text/plain")
+		stats, err := rx.delegate.Stats()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "failed to fetch stats: %s\n", err.Error())
+		} else {
+			fmt.Fprintf(w, "Total number of unique cids: %d\n", stats.MultihashCount)
+		}
+	})
+
 	return mux
 }
 
