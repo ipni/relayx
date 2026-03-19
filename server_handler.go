@@ -81,6 +81,16 @@ func (rx *Server) ServeMux() *http.ServeMux {
 	mux.HandleFunc("DELETE /ipni/v0/relay/ingest/{provider_id}", rx.ingestDeleteProviderHandler)
 	mux.Handle("GET /metrics/", newMetricsHandler())
 	mux.Handle("GET /debug/pprof/", newPprofHandler())
+
+	if pebblemetrics, ok := rx.delegate.(interface {
+		DumpPebbleMetrics() string
+	}); ok {
+		mux.HandleFunc("GET /metrics/pebble", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("content-type", "text/plain")
+			w.Write([]byte(pebblemetrics.DumpPebbleMetrics()))
+		})
+	}
+
 	return mux
 }
 
