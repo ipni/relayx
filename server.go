@@ -1,6 +1,7 @@
 package relayx
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -44,13 +45,15 @@ func (rx *Server) Start() error {
 	return nil
 }
 
-func (rx *Server) Stop() error {
+// Stop stops accepting new connections and waits for in-flight requests to
+// finish. If ctx expires, remaining connections are closed immediately.
+// Stop does not close the delegate indexer; the caller must Flush and Close it
+// after Stop returns so in-flight requests are not served against a closed DB.
+func (rx *Server) Stop(ctx context.Context) error {
 	if rx.server == nil {
 		return nil
 	}
-	if err := rx.server.Close(); err != nil {
-		return err
-	}
+	err := rx.server.Shutdown(ctx)
 	rx.server = nil
-	return nil
+	return err
 }
