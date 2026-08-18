@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	ppebble "github.com/cockroachdb/pebble/v2"
 	"github.com/cockroachdb/pebble/v2/bloom"
@@ -16,6 +21,9 @@ import (
 var logger = log.Logger("relayx/cmd")
 
 func main() {
+	ctx, stopSignalHandling := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignalHandling()
+
 	app := cli.App{
 		Name: "relayx",
 		Commands: []*cli.Command{
@@ -44,8 +52,17 @@ func main() {
 						Usage:       "Path to the pebble options file. Has no effect if --delegate is not pebble.",
 						DefaultText: "Default pebble options",
 					},
+					&cli.DurationFlag{
+						Name:  "httpShutdownTimeout",
+						Usage: "Maximum time to wait for in-flight HTTP requests on shutdown before closing remaining connections. Does not include subsequent indexer flush and close.",
+						Value: 15 * time.Second,
+					},
 				},
 				Action: func(cctx *cli.Context) error {
+					httpShutdownTimeout := cctx.Duration("httpShutdownTimeout")
+					if httpShutdownTimeout < 0 {
+						return fmt.Errorf("httpShutdownTimeout must be >= 0, got %s", httpShutdownTimeout)
+					}
 					var delegate indexer.Interface
 					switch d := cctx.String("delegate"); d {
 					case "pebble":
@@ -94,14 +111,46 @@ func main() {
 					}
 					logger.Infow("Relayx server started", "address", cctx.String("listen"))
 					<-cctx.Context.Done()
-					logger.Info("Stopping relayx server")
-					return server.Stop()
+					// Restore default signal handling so a second SIGINT/SIGTERM
+					// terminates immediately during a long flush/close.
+					stopSignalHandling()
+					return shutdown(server, delegate, httpShutdownTimeout)
 				},
 			},
 		},
 	}
-	if err := app.Run(os.Args); err != nil {
+	if err := app.RunContext(ctx, os.Args); err != nil {
 		logger.Error("Error running app", "error", err)
 		os.Exit(1)
 	}
+}
+
+func shutdown(server *relayx.Server, delegate indexer.Interface, httpShutdownTimeout time.Duration) error {
+	logger.Infow("Stopping HTTP server", "timeout", httpShutdownTimeout)
+	httpCtx, httpCancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
+	defer httpCancel()
+	var errs error
+	if err := server.Stop(httpCtx); err != nil {
+		logger.Errorw("HTTP server shutdown", "error", err)
+		errs = errors.Join(errs, err)
+	}
+
+	logger.Info("Flushing delegate indexer")
+	flushStart := time.Now()
+	if err := delegate.Flush(); err != nil {
+		logger.Errorw("Failed to flush delegate indexer", "error", err)
+		errs = errors.Join(errs, err)
+	} else {
+		logger.Infow("Flushed delegate indexer", "took", time.Since(flushStart))
+	}
+
+	logger.Info("Closing delegate indexer")
+	closeStart := time.Now()
+	if err := delegate.Close(); err != nil {
+		logger.Errorw("Failed to close delegate indexer", "error", err)
+		errs = errors.Join(errs, err)
+	} else {
+		logger.Infow("Closed delegate indexer", "took", time.Since(closeStart))
+	}
+	return errs
 }
