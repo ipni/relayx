@@ -39,7 +39,7 @@ func (rx *Server) Start() error {
 	}
 	go func() {
 		if err := rx.server.Serve(listen); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server stopped erroneously", "error", err)
+			logger.Errorw("server stopped erroneously", "error", err)
 		}
 	}()
 	return nil
