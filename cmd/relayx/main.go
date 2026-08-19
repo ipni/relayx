@@ -130,7 +130,7 @@ func shutdown(server *relayx.Server, delegate indexer.Interface, httpShutdownTim
 	httpCtx, httpCancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
 	defer httpCancel()
 	var errs error
-	if err := server.Stop(httpCtx); err != nil {
+	if err := server.StopContext(httpCtx); err != nil {
 		logger.Errorw("HTTP server shutdown", "error", err)
 		errs = errors.Join(errs, err)
 	}
