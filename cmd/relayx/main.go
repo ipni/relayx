@@ -120,7 +120,7 @@ func main() {
 		},
 	}
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		logger.Error("Error running app", "error", err)
+		logger.Errorw("Error running app", "error", err)
 		os.Exit(1)
 	}
 }
