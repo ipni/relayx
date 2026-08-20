@@ -118,7 +118,7 @@ func main() {
 		},
 	}
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		logger.Error("Error running app", "error", err)
+		logger.Errorw("Error running app", "error", err)
 		os.Exit(1)
 	}
 }
@@ -128,7 +128,7 @@ func shutdown(server *relayx.Server, delegate indexer.Interface, httpShutdownTim
 	httpCtx, httpCancel := context.WithTimeout(context.Background(), httpShutdownTimeout)
 	defer httpCancel()
 	var errs error
-	if err := server.Stop(httpCtx); err != nil {
+	if err := server.StopContext(httpCtx); err != nil {
 		logger.Errorw("HTTP server shutdown", "error", err)
 		errs = errors.Join(errs, err)
 	}
