@@ -15,6 +15,15 @@ See [RelayX OpenAPI specification](openapi.yaml).
 - **HTTP API**: Provides a simple HTTP API for querying and indexing data.
 - **Client SDK**: Includes a client SDK for easy integration with existing indexer implementations.
 - **Indexing**: Supports indexing of data using the Pebble indexer.
+- **Per-provider metering**: Optional background scan that counts multihashes
+  and slots per provider. Exposed at `/ipni/v0/relay/metering`,
+  `/ipni/v0/relay/metering/providers`, `/ipni/v0/relay/metering/providers/{provider_id}`,
+  `/ipni/v0/relay/metering/scan`, and `/ipni/v0/relay/metering/scan/{provider_id}`.
+  `POST /ipni/v0/relay/metering/scan` starts a scan; `DELETE` stops the current
+  scan and records `user cancelled` on scan status. Pass `?reason=` to add a
+  note after that text.
+  Configure batch size, interval, and related options on the relayx process
+  (CLI flags), not on storetheindex when it uses relayx as the value-store backend.
 - **Decoupled Architecture**: Separates the indexing logic from the ingestion pipeline, allowing for more flexible and
   scalable data processing.
 - **Extensible**: Easily extendable to support different indexers or data sources.
@@ -82,7 +91,28 @@ RelayX server with a specific indexer implementation and configuration options. 
 go install github.com/ipni/relayx/cmd/relayx@latest
 
 relayx serve --delegate pebble
+
+# With per-provider metering enabled:
+relayx serve --delegate pebble --meteringEnabled \
+  --meteringBatchSize 1000000 \
+  --meteringInterval 24h \
+  --meteringTimeFill 0.1
 ```
+
+Metering flags (pebble delegate only):
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--meteringEnabled` | false | Enable the background scanner |
+| `--meteringBatchSize` | 1000000 | Keys read per batch |
+| `--meteringInterval` | 0 | Wait before the next automatic scan. A manual scan restarts this wait. 0 = manual only |
+| `--meteringTimeFill` | 0.1 | Fraction of time spent reading, in (0, 1]. After a batch that took T, the scan sleeps T*(1-fill)/fill. 1 runs batches back to back. |
+| `--meteringExportProviderMetrics` | false | Export per-provider gauges to Prometheus. One series per provider; leave off unless the provider set is known to be small. Totals are always exported. |
+
+When storetheindex uses `ValueStoreType: "relayx"`, enable and tune metering with
+these relayx flags. storetheindex's admin `/metering` API forwards to relayx;
+`Indexer.Metering` in the storetheindex config applies only to a local pebble
+value store.
 
 ## License
 

@@ -1,14 +1,14 @@
 module github.com/ipni/relayx
 
-go 1.26
+go 1.26.0
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
 	github.com/cockroachdb/pebble/v2 v2.1.7
 	github.com/ipfs/go-cid v0.6.2
 	github.com/ipfs/go-log/v2 v2.9.2
-	github.com/ipni/go-indexer-core v0.9.6
-	github.com/libp2p/go-libp2p v0.49.0
+	github.com/ipni/go-indexer-core v0.9.8-0.20261007192114-6e5cdd14e620
+	github.com/libp2p/go-libp2p v0.50.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/prometheus/client_golang v1.24.1
 	github.com/stretchr/testify v1.12.1
@@ -64,11 +64,11 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
+	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )

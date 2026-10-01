@@ -138,6 +138,227 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /ipni/v0/relay/metering:
+    get:
+      summary: Get metering totals.
+      description: Returns whole-store totals from the latest completed metering scan. 204 if no scan has completed yet.
+      tags:
+        - metering
+      responses:
+        "200":
+          description: Latest completed scan totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletedScanStats"
+        "204":
+          description: No completed scan yet
+        "501":
+          description: Metering is not supported by the delegate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ipni/v0/relay/metering/providers:
+    get:
+      summary: Get metering stats for every provider.
+      description: Returns the latest completed metering scan with every provider row. 204 if no scan has completed yet.
+      tags:
+        - metering
+      responses:
+        "200":
+          description: Latest completed scan report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllStatsReport"
+        "204":
+          description: No completed scan yet
+        "501":
+          description: Metering is not supported by the delegate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ipni/v0/relay/metering/providers/{provider_id}:
+    get:
+      summary: Get metering stats for one provider.
+      description: Returns that provider's counters from the latest completed metering scan, or 204 if no scan has completed or the provider has no recorded stats.
+      tags:
+        - metering
+      parameters:
+        - name: provider_id
+          in: path
+          required: true
+          description: libp2p peer ID of the provider.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Provider counters from the latest completed scan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderStats"
+        "204":
+          description: No completed scan, or the provider has no recorded stats
+        "400":
+          description: Invalid provider ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Metering is not supported by the delegate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ipni/v0/relay/metering/scan:
+    get:
+      summary: Get metering scan status.
+      description: Returns the latest metering scan. State is none, in_progress, done, or error. When State is none, the response contains only that field. A finished or failed scan keeps its counters until the next scan replaces them.
+      tags:
+        - metering
+      responses:
+        "200":
+          description: Current scan status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanStatus"
+        "501":
+          description: Metering is not supported by the delegate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      summary: Trigger a metering scan.
+      description: Starts a new metering scan immediately. Returns 409 if a scan is already in progress.
+      tags:
+        - metering
+      responses:
+        "202":
+          description: Scan accepted. The scan ID is available from the scan status once the scan has started.
+        "409":
+          description: Scan already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Metering is not supported by the delegate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Cancel a metering scan.
+      description: Stops the in-progress metering scan. The scan status then reports Error as "user cancelled", optionally followed by the reason query parameter. Returns 409 if no scan is in progress.
+      tags:
+        - metering
+      parameters:
+        - name: reason
+          in: query
+          required: false
+          description: Optional text explaining why the scan was cancelled. Shown after "user cancelled" on scan status.
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Cancel accepted. The scan stops and records the cancellation on scan status.
+        "409":
+          description: No scan is in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Metering is not supported by the delegate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ipni/v0/relay/metering/scan/{provider_id}:
+    get:
+      summary: Get metering scan status for one provider.
+      description: Same as GET /metering/scan, limited to one provider's rows in Current. When State is none, the response contains only that field.
+      tags:
+        - metering
+      parameters:
+        - name: provider_id
+          in: path
+          required: true
+          description: libp2p peer ID of the provider.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current scan status for one provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanStatus"
+        "400":
+          description: Invalid provider ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "501":
+          description: Metering is not supported by the delegate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     IngestPutRequest:
@@ -180,3 +401,129 @@ components:
         error:
           type: string
           description: A human-readable error message.
+
+    ScanStatus:
+      type: object
+      properties:
+        State:
+          type: string
+          enum:
+            - none
+            - in_progress
+            - done
+            - error
+          description: none when no scan has been recorded, in_progress while one is running, done after it finishes, error when it stopped with a failure. A finished or failed scan keeps the rest of this object until the next scan replaces it.
+        ScanID:
+          type: integer
+          format: uint64
+          description: Identifies the scan. Omitted when State is none.
+        StartedAt:
+          type: string
+          format: date-time
+          description: When the scan started. Omitted when State is none.
+        CursorKey:
+          type: string
+          format: byte
+          description: Latest key the scan has finished, base64-encoded.
+        EstimatedPercentDone:
+          type: number
+          format: double
+          description: Cursor position in the sha2-256 multihash range, from 0 to 100. Computed when status is read. 100 when State is done.
+        EstimatedFinish:
+          type: string
+          format: date-time
+          description: Projected completion time while the scan is running. The completion time when State is done.
+        Current:
+          $ref: "#/components/schemas/StatsSnapshot"
+          description: Counters committed so far. Kept after the scan finishes or fails, until the next scan replaces them.
+        Error:
+          type: string
+          description: Why the scan stopped when State is error. Omitted otherwise.
+
+    StatsSnapshot:
+      type: object
+      properties:
+        Totals:
+          $ref: "#/components/schemas/StoreTotals"
+        Providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderStats"
+
+    AllStatsReport:
+      type: object
+      properties:
+        MeasuredAt:
+          type: string
+          format: date-time
+          description: When this completed scan finished measuring.
+        Totals:
+          $ref: "#/components/schemas/StoreTotals"
+        Providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderStats"
+
+    CompletedScanStats:
+      type: object
+      properties:
+        MeasuredAt:
+          type: string
+          format: date-time
+          description: When this completed scan finished measuring.
+        Totals:
+          $ref: "#/components/schemas/StoreTotals"
+
+    StoreTotals:
+      type: object
+      description: Whole-store counters. The in-progress scan and the finished report use this same object.
+      properties:
+        Active:
+          $ref: "#/components/schemas/EntryMeters"
+          description: Multihash records that decoded and still have at least one value record.
+        Deleted:
+          $ref: "#/components/schemas/EntryMeters"
+          description: Multihash records that decoded and whose value records are all gone.
+        Invalid:
+          $ref: "#/components/schemas/EntryMeters"
+          description: Multihash records whose value could not be decoded. Slots stays zero.
+
+    EntryMeters:
+      type: object
+      description: Count, byte sizes, and packed slots for one class of multihash records.
+      properties:
+        Entries:
+          type: integer
+          format: uint64
+          description: Number of multihash keys in this class.
+        KeyBytes:
+          type: integer
+          format: uint64
+          description: Total size of those keys.
+        ValueBytes:
+          type: integer
+          format: uint64
+          description: Total size of those values.
+        Slots:
+          type: integer
+          format: uint64
+          description: Value-key entries packed inside these records. One multihash mapped to two contexts counts as two slots. Zero when the value did not decode.
+
+    ProviderStats:
+      type: object
+      properties:
+        ProviderID:
+          type: string
+          description: Provider these counters belong to.
+        Multihashes:
+          type: integer
+          format: uint64
+          description: Distinct multihashes that still have a value record for this provider.
+        Slots:
+          type: integer
+          format: uint64
+          description: Value records still present for this provider. One multihash advertised under two contexts counts as two slots.
+        DeletedContexts:
+          type: integer
+          format: uint64
+          description: Slots whose context value record is gone while this provider still has some other value record.
