@@ -166,3 +166,256 @@ func (c *Client) Close() error {
 func (c *Client) Stats() (*indexer.Stats, error) {
 	return nil, nil
 }
+
+func (c *Client) MeteringAllStats(ctx context.Context, providerIDs []peer.ID) (*indexer.AllStatsReport, error) {
+	switch {
+	case providerIDs != nil && len(providerIDs) == 0:
+		// Totals only — matches storetheindex GET /metering.
+		stats, err := c.getCompletedScanStats(ctx)
+		if err != nil || stats == nil {
+			return nil, err
+		}
+		return &indexer.AllStatsReport{CompletedScanStats: *stats}, nil
+	case len(providerIDs) == 1:
+		// One provider — matches storetheindex GET /metering/providers/{id},
+		// with whole-store totals from GET /metering.
+		stats, err := c.getCompletedScanStats(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if stats == nil {
+			return nil, nil
+		}
+		ps, found, err := c.getProviderStats(ctx, providerIDs[0])
+		if err != nil {
+			return nil, err
+		}
+		report := &indexer.AllStatsReport{CompletedScanStats: *stats}
+		if found {
+			report.Providers = []indexer.ProviderStats{*ps}
+		}
+		return report, nil
+	default:
+		// nil (all providers) or more than one ID: fetch the full report.
+		report, err := c.getAllProvidersReport(ctx)
+		if err != nil || report == nil {
+			return nil, err
+		}
+		if len(providerIDs) > 1 {
+			wanted := make(map[peer.ID]struct{}, len(providerIDs))
+			for _, id := range providerIDs {
+				wanted[id] = struct{}{}
+			}
+			filtered := report.Providers[:0]
+			for _, ps := range report.Providers {
+				if _, ok := wanted[ps.ProviderID]; ok {
+					filtered = append(filtered, ps)
+				}
+			}
+			report.Providers = filtered
+		}
+		return report, nil
+	}
+}
+
+func (c *Client) getCompletedScanStats(ctx context.Context) (*indexer.CompletedScanStats, error) {
+	endpoint, err := url.JoinPath(c.serverAddr, "metering")
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var stats indexer.CompletedScanStats
+		if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+			return nil, err
+		}
+		return &stats, nil
+	case http.StatusNoContent:
+		return nil, nil
+	case http.StatusNotImplemented:
+		return nil, indexer.ErrMeteringNotSupported
+	default:
+		return nil, c.decodeError(resp)
+	}
+}
+
+func (c *Client) getProviderStats(ctx context.Context, providerID peer.ID) (*indexer.ProviderStats, bool, error) {
+	endpoint, err := url.JoinPath(c.serverAddr, "metering", "providers", providerID.String())
+	if err != nil {
+		return nil, false, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var ps indexer.ProviderStats
+		if err := json.NewDecoder(resp.Body).Decode(&ps); err != nil {
+			return nil, false, err
+		}
+		return &ps, true, nil
+	case http.StatusNoContent:
+		return nil, false, nil
+	case http.StatusNotImplemented:
+		return nil, false, indexer.ErrMeteringNotSupported
+	default:
+		return nil, false, c.decodeError(resp)
+	}
+}
+
+func (c *Client) getAllProvidersReport(ctx context.Context) (*indexer.AllStatsReport, error) {
+	endpoint, err := url.JoinPath(c.serverAddr, "metering", "providers")
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var report indexer.AllStatsReport
+		if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+			return nil, err
+		}
+		return &report, nil
+	case http.StatusNoContent:
+		return nil, nil
+	case http.StatusNotImplemented:
+		return nil, indexer.ErrMeteringNotSupported
+	default:
+		return nil, c.decodeError(resp)
+	}
+}
+
+func (c *Client) MeteringScanStatus(ctx context.Context, providerIDs []peer.ID) (*indexer.ScanStatus, error) {
+	var endpoint string
+	var err error
+	switch {
+	case providerIDs != nil && len(providerIDs) == 0:
+		endpoint, err = url.JoinPath(c.serverAddr, "metering", "scan")
+	case len(providerIDs) == 1:
+		endpoint, err = url.JoinPath(c.serverAddr, "metering", "scan", providerIDs[0].String())
+	default:
+		endpoint, err = url.JoinPath(c.serverAddr, "metering", "scan")
+	}
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var status indexer.ScanStatus
+		if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+			return nil, err
+		}
+		// Empty selection asks for totals only in Current.
+		if providerIDs != nil && len(providerIDs) == 0 {
+			status.Current.Providers = nil
+		}
+		return &status, nil
+	case http.StatusNotImplemented:
+		return nil, indexer.ErrMeteringNotSupported
+	default:
+		return nil, c.decodeError(resp)
+	}
+}
+
+func (c *Client) MeteringTriggerScan(ctx context.Context) error {
+	endpoint, err := url.JoinPath(c.serverAddr, "metering", "scan")
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusAccepted:
+		return nil
+	case http.StatusConflict:
+		return indexer.ErrScanInProgress
+	case http.StatusNotImplemented:
+		return indexer.ErrMeteringNotSupported
+	default:
+		return c.decodeError(resp)
+	}
+}
+
+func (c *Client) MeteringCancelScan(ctx context.Context, reason string) error {
+	endpoint, err := url.JoinPath(c.serverAddr, "metering", "scan")
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return err
+	}
+	if reason != "" {
+		q := u.Query()
+		q.Set("reason", reason)
+		u.RawQuery = q.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusAccepted:
+		return nil
+	case http.StatusConflict:
+		return indexer.ErrScanNotInProgress
+	case http.StatusNotImplemented:
+		return indexer.ErrMeteringNotSupported
+	default:
+		return c.decodeError(resp)
+	}
+}
+
+func (c *Client) decodeError(resp *http.Response) error {
+	var errResp ErrorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+		return fmt.Errorf("unsuccessful response %d: %w", resp.StatusCode, err)
+	}
+	return fmt.Errorf("unsuccessful response %d: %s", resp.StatusCode, errResp.Error)
+}
+
+var _ indexer.StatsMeter = (*Client)(nil)

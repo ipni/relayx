@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	"github.com/ipni/go-indexer-core"
@@ -48,6 +49,22 @@ func (m *MockDelegate) Stats() (*indexer.Stats, error) {
 	panic("should not have been called")
 }
 
+func (m *MockDelegate) MeteringAllStats(context.Context, []peer.ID) (*indexer.AllStatsReport, error) {
+	return nil, indexer.ErrMeteringNotSupported
+}
+
+func (m *MockDelegate) MeteringScanStatus(context.Context, []peer.ID) (*indexer.ScanStatus, error) {
+	return nil, indexer.ErrMeteringNotSupported
+}
+
+func (m *MockDelegate) MeteringTriggerScan(context.Context) error {
+	return indexer.ErrMeteringNotSupported
+}
+
+func (m *MockDelegate) MeteringCancelScan(context.Context, string) error {
+	return indexer.ErrMeteringNotSupported
+}
+
 func (m *MockDelegate) Put(v indexer.Value, mhs ...multihash.Multihash) error {
 	if m.PutFunc != nil {
 		return m.PutFunc(v, mhs...)
@@ -74,6 +91,317 @@ func (m *MockDelegate) RemoveProvider(ctx context.Context, pid peer.ID) error {
 		return m.RemoveProviderFunc(ctx, pid)
 	}
 	return nil
+}
+
+type MockProviderMeter struct {
+	MockDelegate
+	AllStatsFunc    func(context.Context, []peer.ID) (*indexer.AllStatsReport, error)
+	ScanStatusFunc  func(context.Context, []peer.ID) (*indexer.ScanStatus, error)
+	TriggerScanFunc func(context.Context) error
+	CancelScanFunc  func(context.Context, string) error
+}
+
+func (m *MockProviderMeter) MeteringAllStats(ctx context.Context, providerIDs []peer.ID) (*indexer.AllStatsReport, error) {
+	if m.AllStatsFunc != nil {
+		return m.AllStatsFunc(ctx, providerIDs)
+	}
+	return nil, nil
+}
+
+func (m *MockProviderMeter) MeteringScanStatus(ctx context.Context, providerIDs []peer.ID) (*indexer.ScanStatus, error) {
+	if m.ScanStatusFunc != nil {
+		return m.ScanStatusFunc(ctx, providerIDs)
+	}
+	return &indexer.ScanStatus{}, nil
+}
+
+func (m *MockProviderMeter) MeteringTriggerScan(ctx context.Context) error {
+	if m.TriggerScanFunc != nil {
+		return m.TriggerScanFunc(ctx)
+	}
+	return nil
+}
+
+func (m *MockProviderMeter) MeteringCancelScan(ctx context.Context, reason string) error {
+	if m.CancelScanFunc != nil {
+		return m.CancelScanFunc(ctx, reason)
+	}
+	return nil
+}
+
+func TestStatsHandlers(t *testing.T) {
+	t.Run("not implemented", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockDelegate{}))
+		require.NoError(t, err)
+		mux := server.ServeMux()
+
+		for _, path := range []string{
+			"/ipni/v0/relay/metering",
+			"/ipni/v0/relay/metering/providers",
+			"/ipni/v0/relay/metering/scan",
+		} {
+			rr := httptest.NewRecorder()
+			mux.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, path, nil))
+			assert.Equal(t, http.StatusNotImplemented, rr.Code, path)
+		}
+
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/ipni/v0/relay/metering/scan", nil))
+		assert.Equal(t, http.StatusNotImplemented, rr.Code)
+
+		rr = httptest.NewRecorder()
+		mux.ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/ipni/v0/relay/metering/scan", nil))
+		assert.Equal(t, http.StatusNotImplemented, rr.Code)
+	})
+
+	t.Run("totals report", func(t *testing.T) {
+		report := &indexer.AllStatsReport{
+			CompletedScanStats: indexer.CompletedScanStats{
+				MeasuredAt: time.Unix(1, 0).UTC(),
+				Totals:     indexer.StoreTotals{Active: indexer.EntryMeters{Entries: 10, Slots: 12}},
+			},
+		}
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			AllStatsFunc: func(_ context.Context, providerIDs []peer.ID) (*indexer.AllStatsReport, error) {
+				require.NotNil(t, providerIDs)
+				require.Empty(t, providerIDs)
+				return report, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering", nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got indexer.CompletedScanStats
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, time.Unix(1, 0).UTC(), got.MeasuredAt)
+		assert.Equal(t, uint64(10), got.Totals.Active.Entries)
+	})
+
+	t.Run("providers report", func(t *testing.T) {
+		pid, err := peer.Decode("12D3KooWBhL7RVxcJdwQU9aVvA8QJjLvTjq5GfJvjCL3bDQNZJXM")
+		require.NoError(t, err)
+		report := &indexer.AllStatsReport{
+			CompletedScanStats: indexer.CompletedScanStats{
+				MeasuredAt: time.Unix(1, 0).UTC(),
+				Totals:     indexer.StoreTotals{Active: indexer.EntryMeters{Entries: 10, Slots: 12}},
+			},
+			Providers: []indexer.ProviderStats{{ProviderID: pid, Multihashes: 3}},
+		}
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			AllStatsFunc: func(_ context.Context, providerIDs []peer.ID) (*indexer.AllStatsReport, error) {
+				require.Nil(t, providerIDs)
+				return report, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/providers", nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got indexer.AllStatsReport
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, time.Unix(1, 0).UTC(), got.MeasuredAt)
+		assert.Equal(t, uint64(10), got.Totals.Active.Entries)
+		require.Len(t, got.Providers, 1)
+		assert.Equal(t, pid, got.Providers[0].ProviderID)
+	})
+
+	t.Run("one provider", func(t *testing.T) {
+		pid, err := peer.Decode("12D3KooWBhL7RVxcJdwQU9aVvA8QJjLvTjq5GfJvjCL3bDQNZJXM")
+		require.NoError(t, err)
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			AllStatsFunc: func(_ context.Context, providerIDs []peer.ID) (*indexer.AllStatsReport, error) {
+				require.Equal(t, []peer.ID{pid}, providerIDs)
+				return &indexer.AllStatsReport{
+					Providers: []indexer.ProviderStats{{ProviderID: pid, Multihashes: 3}},
+				}, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/providers/"+pid.String(), nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got indexer.ProviderStats
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, pid, got.ProviderID)
+		assert.Equal(t, uint64(3), got.Multihashes)
+	})
+
+	t.Run("providers no content", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/providers", nil))
+		assert.Equal(t, http.StatusNoContent, rr.Code)
+	})
+
+	t.Run("scan status idle", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			ScanStatusFunc: func(context.Context, []peer.ID) (*indexer.ScanStatus, error) {
+				return &indexer.ScanStatus{State: indexer.ScanStateNone, ScanID: 7}, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/scan", nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got map[string]any
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, "none", got["State"])
+		assert.NotContains(t, got, "ScanID")
+	})
+
+	t.Run("scan status failed", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			ScanStatusFunc: func(context.Context, []peer.ID) (*indexer.ScanStatus, error) {
+				return &indexer.ScanStatus{
+					State:  indexer.ScanStateError,
+					ScanID: 7,
+					Error:  "batch failed",
+				}, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/scan", nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got indexer.ScanStatus
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, indexer.ScanStateError, got.State)
+		assert.Equal(t, "batch failed", got.Error)
+		assert.Equal(t, uint64(7), got.ScanID)
+	})
+
+	t.Run("scan status done", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			ScanStatusFunc: func(context.Context, []peer.ID) (*indexer.ScanStatus, error) {
+				return &indexer.ScanStatus{
+					State:  indexer.ScanStateDone,
+					ScanID: 7,
+					Current: indexer.StatsSnapshot{
+						Totals: indexer.StoreTotals{Active: indexer.EntryMeters{Entries: 4}},
+					},
+				}, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/scan", nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got indexer.ScanStatus
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, indexer.ScanStateDone, got.State)
+		assert.Equal(t, uint64(7), got.ScanID)
+		assert.Equal(t, uint64(4), got.Current.Totals.Active.Entries)
+	})
+
+	t.Run("scan status", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			ScanStatusFunc: func(_ context.Context, providerIDs []peer.ID) (*indexer.ScanStatus, error) {
+				require.Nil(t, providerIDs)
+				return &indexer.ScanStatus{State: indexer.ScanStateInProgress, ScanID: 7}, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/scan", nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got indexer.ScanStatus
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, indexer.ScanStateInProgress, got.State)
+		assert.Equal(t, uint64(7), got.ScanID)
+	})
+
+	t.Run("provider scan status", func(t *testing.T) {
+		pid, err := peer.Decode("12D3KooWBhL7RVxcJdwQU9aVvA8QJjLvTjq5GfJvjCL3bDQNZJXM")
+		require.NoError(t, err)
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			ScanStatusFunc: func(_ context.Context, providerIDs []peer.ID) (*indexer.ScanStatus, error) {
+				require.Equal(t, []peer.ID{pid}, providerIDs)
+				return &indexer.ScanStatus{
+					State:  indexer.ScanStateInProgress,
+					ScanID: 7,
+					Current: indexer.StatsSnapshot{
+						Providers: []indexer.ProviderStats{{ProviderID: pid, Multihashes: 2}},
+					},
+				}, nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/ipni/v0/relay/metering/scan/"+pid.String(), nil))
+		require.Equal(t, http.StatusOK, rr.Code)
+		var got indexer.ScanStatus
+		require.NoError(t, json.NewDecoder(rr.Body).Decode(&got))
+		assert.Equal(t, indexer.ScanStateInProgress, got.State)
+		require.Len(t, got.Current.Providers, 1)
+		assert.Equal(t, pid, got.Current.Providers[0].ProviderID)
+	})
+
+	t.Run("trigger scan", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			TriggerScanFunc: func(context.Context) error {
+				return nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/ipni/v0/relay/metering/scan", nil))
+		require.Equal(t, http.StatusAccepted, rr.Code)
+	})
+
+	t.Run("trigger conflict", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			TriggerScanFunc: func(context.Context) error {
+				return indexer.ErrScanInProgress
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/ipni/v0/relay/metering/scan", nil))
+		assert.Equal(t, http.StatusConflict, rr.Code)
+	})
+
+	t.Run("cancel scan", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			CancelScanFunc: func(context.Context, string) error {
+				return nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/ipni/v0/relay/metering/scan", nil))
+		require.Equal(t, http.StatusAccepted, rr.Code)
+	})
+
+	t.Run("cancel scan with reason", func(t *testing.T) {
+		called := false
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			CancelScanFunc: func(_ context.Context, reason string) error {
+				called = true
+				require.Equal(t, "paused for gc", reason)
+				return nil
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, "/ipni/v0/relay/metering/scan?reason=paused+for+gc", nil)
+		server.ServeMux().ServeHTTP(rr, req)
+		require.Equal(t, http.StatusAccepted, rr.Code)
+		require.True(t, called)
+	})
+
+	t.Run("cancel not in progress", func(t *testing.T) {
+		server, err := NewServer(WithDelegateIndexer(&MockProviderMeter{
+			CancelScanFunc: func(context.Context, string) error {
+				return indexer.ErrScanNotInProgress
+			},
+		}))
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		server.ServeMux().ServeHTTP(rr, httptest.NewRequest(http.MethodDelete, "/ipni/v0/relay/metering/scan", nil))
+		assert.Equal(t, http.StatusConflict, rr.Code)
+	})
 }
 
 func TestIngestPutHandler(t *testing.T) {
