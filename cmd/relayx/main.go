@@ -57,6 +57,28 @@ func main() {
 						Usage: "Maximum time to wait for in-flight HTTP requests on shutdown before closing remaining connections. Does not include subsequent indexer flush and close.",
 						Value: 15 * time.Second,
 					},
+					&cli.BoolFlag{
+						Name:  "meteringEnabled",
+						Usage: "Enable the background per-provider metering scanner on the pebble delegate.",
+					},
+					&cli.IntFlag{
+						Name:  "meteringBatchSize",
+						Usage: "Maximum keys read per metering scan batch.",
+						Value: 1000000,
+					},
+					&cli.DurationFlag{
+						Name:  "meteringInterval",
+						Usage: "Minimum time between automatic metering scans. Zero disables automatic scans (manual trigger still works).",
+					},
+					&cli.Float64Flag{
+						Name:  "meteringTimeFill",
+						Usage: "Fraction of time the metering scan spends reading, in (0, 1]. After a batch that took T, the scan sleeps T*(1-fill)/fill. 1 runs batches back to back.",
+						Value: 0.1,
+					},
+					&cli.BoolFlag{
+						Name:  "meteringExportProviderMetrics",
+						Usage: "Export per-provider metering gauges to Prometheus. One series per provider; leave off unless the provider set is known to be small.",
+					},
 				},
 				Action: func(cctx *cli.Context) error {
 					httpShutdownTimeout := cctx.Duration("httpShutdownTimeout")
@@ -92,8 +114,17 @@ func main() {
 								return fmt.Errorf("failed to parse pebble options: %w", err)
 							}
 						}
+						var pebbleOpts []pebble.Option
+						if cctx.Bool("meteringEnabled") {
+							pebbleOpts = append(pebbleOpts, pebble.WithMetering(pebble.MeteringConfig{
+								BatchSize:             cctx.Int("meteringBatchSize"),
+								Interval:              cctx.Duration("meteringInterval"),
+								TimeFill:              cctx.Float64("meteringTimeFill"),
+								ExportProviderMetrics: cctx.Bool("meteringExportProviderMetrics"),
+							}))
+						}
 						var err error
-						delegate, err = pebble.New(cctx.Path("pebblePath"), opts)
+						delegate, err = pebble.New(cctx.Path("pebblePath"), opts, pebbleOpts...)
 						if err != nil {
 							return fmt.Errorf("failed to create pebble indexer: %w", err)
 						}
@@ -102,7 +133,8 @@ func main() {
 					}
 					server, err := relayx.NewServer(
 						relayx.WithListenAddr(cctx.String("listen")),
-						relayx.WithDelegateIndexer(delegate))
+						relayx.WithDelegateIndexer(delegate),
+						relayx.WithExportMeteringProviderMetrics(cctx.Bool("meteringExportProviderMetrics")))
 					if err != nil {
 						return err
 					}
