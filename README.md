@@ -108,6 +108,7 @@ Metering flags (pebble delegate only):
 | `--meteringInterval` | 0 | Wait before the next automatic scan. A manual scan restarts this wait. 0 = manual only |
 | `--meteringTimeFill` | 0.1 | Fraction of time spent reading, in (0, 1]. After a batch that took T, the scan sleeps T*(1-fill)/fill. 1 runs batches back to back. |
 | `--meteringExportProviderMetrics` | false | Export per-provider gauges to Prometheus. One series per provider; leave off unless the provider set is known to be small. Totals are always exported. |
+| `--meteringCleanup` | false | During a scan, drop multihash slots whose value record is already gone. A newer advertisement of that slot is kept. |
 
 When storetheindex uses `ValueStoreType: "relayx"`, enable and tune metering with
 these relayx flags. storetheindex's admin `/metering` API forwards to relayx;

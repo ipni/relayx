@@ -7,7 +7,7 @@ require (
 	github.com/cockroachdb/pebble/v2 v2.1.7
 	github.com/ipfs/go-cid v0.6.2
 	github.com/ipfs/go-log/v2 v2.9.2
-	github.com/ipni/go-indexer-core v0.9.8-0.20261007192114-6e5cdd14e620
+	github.com/ipni/go-indexer-core v0.9.8-0.20261020195834-a63ccbf089d8
 	github.com/libp2p/go-libp2p v0.50.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/prometheus/client_golang v1.24.1
