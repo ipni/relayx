@@ -79,6 +79,10 @@ func main() {
 						Name:  "meteringExportProviderMetrics",
 						Usage: "Export per-provider metering gauges to Prometheus. One series per provider; leave off unless the provider set is known to be small.",
 					},
+					&cli.BoolFlag{
+						Name:  "meteringCleanup",
+						Usage: "During a metering scan, drop multihash slots whose value record is already gone. A newer advertisement of that slot is kept.",
+					},
 				},
 				Action: func(cctx *cli.Context) error {
 					httpShutdownTimeout := cctx.Duration("httpShutdownTimeout")
@@ -121,6 +125,7 @@ func main() {
 								Interval:              cctx.Duration("meteringInterval"),
 								TimeFill:              cctx.Float64("meteringTimeFill"),
 								ExportProviderMetrics: cctx.Bool("meteringExportProviderMetrics"),
+								Cleanup:               cctx.Bool("meteringCleanup"),
 							}))
 						}
 						var err error
