@@ -421,14 +421,10 @@ components:
           type: string
           format: date-time
           description: When the scan started. Omitted when State is none.
-        CursorKey:
-          type: string
-          format: byte
-          description: Latest key the scan has finished, base64-encoded.
         EstimatedPercentDone:
           type: number
           format: double
-          description: Cursor position in the sha2-256 multihash range, from 0 to 100. Computed when status is read. 100 when State is done.
+          description: Rough estimate of how much of the scan is done, from 0 to 100. It can stay flat or jump while the scan runs. Computed when status is read. 100 when State is done.
         EstimatedFinish:
           type: string
           format: date-time
