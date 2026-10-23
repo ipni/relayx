@@ -21,7 +21,6 @@ COPY --from=jemalloc \
     /lib/x86_64-linux-gnu/libgcc_s.so.1 \
     /usr/lib/x86_64-linux-gnu/
 ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
-# Optional: return dirty pages to the OS on a few-second delay (CRDB-style).
-ENV MALLOC_CONF=background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000
+ENV MALLOC_CONF=background_thread:true,narenas:2,dirty_decay_ms:0,muzzy_decay_ms
 
 ENTRYPOINT ["/usr/bin/relayx"]

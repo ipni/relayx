@@ -9,8 +9,9 @@ import (
 type (
 	ServerOption  func(*serverOptions) error
 	serverOptions struct {
-		listenAddr string
-		delegate   indexer.Interface
+		listenAddr                    string
+		delegate                      indexer.Interface
+		exportMeteringProviderMetrics bool
 	}
 )
 
@@ -32,6 +33,15 @@ func newServerOptions(opts ...ServerOption) (*serverOptions, error) {
 func WithListenAddr(addr string) ServerOption {
 	return func(o *serverOptions) error {
 		o.listenAddr = addr
+		return nil
+	}
+}
+
+// WithExportMeteringProviderMetrics registers Prometheus views labeled by
+// provider. Leave this off unless the provider set is known to be small.
+func WithExportMeteringProviderMetrics(enabled bool) ServerOption {
+	return func(o *serverOptions) error {
+		o.exportMeteringProviderMetrics = enabled
 		return nil
 	}
 }
