@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -83,11 +84,28 @@ func main() {
 						Name:  "meteringCleanup",
 						Usage: "During a metering scan, drop multihash slots whose value record is already gone. A newer advertisement of that slot is kept.",
 					},
+					&cli.StringFlag{
+						Name:  "importListen",
+						Usage: "Address of the import listener, which serves the pebble store's data to an indexer that imports it. Empty leaves the import off.",
+					},
+					&cli.PathFlag{
+						Name:  "importTokenFile",
+						Usage: "File that holds the bearer token every import request must carry. Required with --importListen.",
+					},
+					&cli.Uint64Flag{
+						Name:        "importPartBytes",
+						Usage:       "Roughly how many bytes of keys and values each import part holds.",
+						DefaultText: "128 MiB",
+					},
 				},
 				Action: func(cctx *cli.Context) error {
 					httpShutdownTimeout := cctx.Duration("httpShutdownTimeout")
 					if httpShutdownTimeout < 0 {
 						return fmt.Errorf("httpShutdownTimeout must be >= 0, got %s", httpShutdownTimeout)
+					}
+					importOpt, err := importOption(cctx)
+					if err != nil {
+						return err
 					}
 					var delegate indexer.Interface
 					switch d := cctx.String("delegate"); d {
@@ -128,7 +146,6 @@ func main() {
 								Cleanup:               cctx.Bool("meteringCleanup"),
 							}))
 						}
-						var err error
 						delegate, err = pebble.New(cctx.Path("pebblePath"), opts, pebbleOpts...)
 						if err != nil {
 							return fmt.Errorf("failed to create pebble indexer: %w", err)
@@ -139,7 +156,9 @@ func main() {
 					server, err := relayx.NewServer(
 						relayx.WithListenAddr(cctx.String("listen")),
 						relayx.WithDelegateIndexer(delegate),
-						relayx.WithExportMeteringProviderMetrics(cctx.Bool("meteringExportProviderMetrics")))
+						relayx.WithExportMeteringProviderMetrics(cctx.Bool("meteringExportProviderMetrics")),
+						importOpt,
+					)
 					if err != nil {
 						return err
 					}
@@ -147,6 +166,9 @@ func main() {
 						return err
 					}
 					logger.Infow("Relayx server started", "address", cctx.String("listen"))
+					if addr := server.ImportAddr(); addr != nil {
+						logger.Infow("Import sender started", "address", addr.String())
+					}
 					<-cctx.Context.Done()
 					// Restore default signal handling so a second SIGINT/SIGTERM
 					// terminates immediately during a long flush/close.
@@ -160,6 +182,28 @@ func main() {
 		logger.Errorw("Error running app", "error", err)
 		os.Exit(1)
 	}
+}
+
+// importOption returns the server option of the import flags. The import
+// is off when importListen is empty.
+func importOption(cctx *cli.Context) (relayx.ServerOption, error) {
+	addr := cctx.String("importListen")
+	if addr == "" {
+		return relayx.WithImport("", "", 0), nil
+	}
+	path := cctx.Path("importTokenFile")
+	if path == "" {
+		return nil, errors.New("importTokenFile is required with importListen")
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read import token file: %w", err)
+	}
+	token := strings.TrimSpace(string(b))
+	if token == "" {
+		return nil, fmt.Errorf("import token file %s is empty", path)
+	}
+	return relayx.WithImport(addr, token, cctx.Uint64("importPartBytes")), nil
 }
 
 func shutdown(server *relayx.Server, delegate indexer.Interface, httpShutdownTimeout time.Duration) error {
