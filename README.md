@@ -115,6 +115,23 @@ these relayx flags. storetheindex's admin `/metering` API forwards to relayx;
 `Indexer.Metering` in the storetheindex config applies only to a local pebble
 value store.
 
+Import flags (pebble delegate only). The import sender lets another indexer
+copy this store's records, context map and multihashes, in parts, many at
+once. It listens on its own address, separate from `--listen`, and is off
+unless `--importListen` is set:
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--importListen` | off | `host:port` of the import listener. |
+| `--importTokenFile` | — | File holding the token that every import request must carry as `Authorization: Bearer <token>`. Required with `--importListen`. Whitespace around it is ignored. |
+| `--importPartBytes` | 128 MiB | Roughly how many bytes of keys and values each part holds. |
+
+The sender has no request limit of its own: the importing indexer decides how
+many parts it reads at once. Stopping relayx cancels the parts in flight and
+waits for them before it closes the store; the importing indexer requests
+them again. Keep the port off the public internet, and put TLS in front of it
+when it crosses networks. The import's metrics are on `/metrics`.
+
 ## License
 
 [SPDX-License-Identifier: Apache-2.0 OR MIT](LICENSE.md)

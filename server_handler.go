@@ -44,6 +44,9 @@ func newMetricsHandler(exportProviderMetrics bool) http.Handler {
 	if err := view.Register(coremetrics.MeteringViews...); err != nil {
 		logger.Warnw("failed to register metering metric views", "err", err)
 	}
+	if err := view.Register(coremetrics.ImportViews...); err != nil {
+		logger.Warnw("failed to register import metric views", "err", err)
+	}
 	if exportProviderMetrics {
 		if err := view.Register(coremetrics.MeteringProviderViews...); err != nil {
 			logger.Warnw("failed to register per-provider metering metric views", "err", err)
